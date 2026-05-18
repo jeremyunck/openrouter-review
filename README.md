@@ -4,7 +4,7 @@ GitHub Action that sends a pull request diff to [OpenRouter](https://openrouter.
 
 ## Setup
 
-1. Add an [OpenRouter API key](https://openrouter.ai/keys) as a repository secret named `OPENROUTER_API_KEY`.
+1. Add an [OpenRouter API key](https://openrouter.ai/keys) as a repository secret named `OPEN_ROUTER_API_KEY`.
 2. Copy the workflow below into `.github/workflows/openrouter-review.yml` in your repository (or use the workflow in this repo as a reference).
 
 ## Usage
@@ -19,7 +19,8 @@ on:
     inputs:
       model:
         description: OpenRouter model id
-        required: true
+        required: false
+        default: deepseek/deepseek-v4-flash
         type: string
       pull_request_number:
         description: PR number to review
@@ -35,8 +36,8 @@ jobs:
     steps:
       - uses: jeremyunck/openrouter-review@v1
         with:
-          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
-          model: ${{ github.event_name == 'workflow_dispatch' && inputs.model || 'anthropic/claude-sonnet-4' }}
+          openrouter-api-key: ${{ secrets.OPEN_ROUTER_API_KEY }}
+          model: ${{ github.event_name == 'workflow_dispatch' && inputs.model || 'deepseek/deepseek-v4-flash' }}
           pull-request-number: ${{ github.event_name == 'workflow_dispatch' && inputs.pull_request_number || '' }}
 ```
 
@@ -45,7 +46,7 @@ jobs:
 | Input | Required | Description |
 | --- | --- | --- |
 | `openrouter-api-key` | Yes | OpenRouter API key |
-| `model` | Yes | OpenRouter model id (e.g. `openai/gpt-4o`, `anthropic/claude-sonnet-4`) |
+| `model` | Yes | OpenRouter model id (default in this repo: `deepseek/deepseek-v4-flash`) |
 | `github-token` | No | Defaults to `github.token` |
 | `prompt` | No | Extra instructions appended to the review request |
 | `pull-request-number` | No* | PR number; required for `workflow_dispatch` when not triggered by `pull_request` |

@@ -11,7 +11,7 @@ inputs:
     description: OpenRouter API key
     required: true
   model:
-    description: OpenRouter model id (e.g. anthropic/claude-sonnet-4, openai/gpt-4o)
+    description: OpenRouter model id (e.g. deepseek/deepseek-v4-flash, openai/gpt-4o)
     required: true
   github-token:
     description: GitHub token with pull-requests write access
