@@ -34,6 +34,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
+      - uses: actions/checkout@v4
       - uses: jeremyunck/openrouter-review@v1
         with:
           openrouter-api-key: ${{ secrets.OPEN_ROUTER_API_KEY }}
