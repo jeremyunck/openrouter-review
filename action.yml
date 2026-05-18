@@ -1,0 +1,31 @@
+name: OpenRouter PR Review
+description: Review a pull request diff with OpenRouter and post the result as a PR comment.
+author: jeremyunck
+
+branding:
+  icon: search
+  color: purple
+
+inputs:
+  openrouter-api-key:
+    description: OpenRouter API key
+    required: true
+  model:
+    description: OpenRouter model id (e.g. anthropic/claude-sonnet-4, openai/gpt-4o)
+    required: true
+  github-token:
+    description: GitHub token with pull-requests write access
+    required: false
+    default: ${{ github.token }}
+  prompt:
+    description: Optional extra instructions for the review
+    required: false
+    default: ''
+  pull-request-number:
+    description: PR number (required for workflow_dispatch when not running on a pull_request event)
+    required: false
+    default: ''
+
+runs:
+  using: node20
+  main: dist/index.js

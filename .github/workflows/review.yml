@@ -1,0 +1,34 @@
+name: OpenRouter PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      model:
+        description: OpenRouter model id
+        required: true
+        type: string
+      pull_request_number:
+        description: PR number to review
+        required: true
+        type: number
+      prompt:
+        description: Optional extra review instructions
+        required: false
+        type: string
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Review pull request
+        uses: ./
+        with:
+          openrouter-api-key: ${{ secrets.OPENROUTER_API_KEY }}
+          model: ${{ github.event_name == 'workflow_dispatch' && inputs.model || vars.OPENROUTER_MODEL || 'anthropic/claude-sonnet-4' }}
+          prompt: ${{ github.event_name == 'workflow_dispatch' && inputs.prompt || '' }}
+          pull-request-number: ${{ github.event_name == 'workflow_dispatch' && inputs.pull_request_number || '' }}
