@@ -142,7 +142,7 @@ async function upsertReviewComment(octokit, owner, repo, issueNumber, body) {
 }
 
 async function run() {
-  const apiKey = core.getInput('openrouter-api-key', { required: true });
+  const apiKey = core.getInput('open-router-api-key', { required: true });
   const model = core.getInput('model') || DEFAULT_MODEL;
   const token = core.getInput('github-token', { required: true });
   const extraPrompt = core.getInput('prompt') || '';

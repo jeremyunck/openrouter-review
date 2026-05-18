@@ -37,7 +37,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: jeremyunck/openrouter-review@v1
         with:
-          openrouter-api-key: ${{ secrets.OPEN_ROUTER_API_KEY }}
+          open-router-api-key: ${{ secrets.OPEN_ROUTER_API_KEY }}
           pull-request-number: ${{ github.event_name == 'workflow_dispatch' && inputs.pull_request_number || '' }}
 ```
 
@@ -45,7 +45,7 @@ jobs:
 
 | Input | Required | Description |
 | --- | --- | --- |
-| `openrouter-api-key` | Yes | OpenRouter API key |
+| `open-router-api-key` | Yes | OpenRouter API key |
 | `model` | No | OpenRouter model id (default: `deepseek/deepseek-v4-flash`) |
 | `github-token` | No | Defaults to `github.token` |
 | `prompt` | No | Extra instructions appended to the review request |

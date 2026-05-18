@@ -30,7 +30,7 @@ jobs:
       - name: Review pull request
         uses: ./
         with:
-          openrouter-api-key: ${{ secrets.OPEN_ROUTER_API_KEY }}
+          open-router-api-key: ${{ secrets.OPEN_ROUTER_API_KEY }}
           model: ${{ github.event_name == 'workflow_dispatch' && inputs.model || vars.OPENROUTER_MODEL || '' }}
           prompt: ${{ github.event_name == 'workflow_dispatch' && inputs.prompt || '' }}
           pull-request-number: ${{ github.event_name == 'workflow_dispatch' && inputs.pull_request_number || '' }}

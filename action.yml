@@ -7,7 +7,7 @@ branding:
   color: purple
 
 inputs:
-  openrouter-api-key:
+  open-router-api-key:
     description: OpenRouter API key
     required: true
   model:
