@@ -72,3 +72,4 @@ npm run build
 ```
 
 Commit `dist/index.js` after changing `src/index.js`.
+
