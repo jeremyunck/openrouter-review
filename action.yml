@@ -22,10 +22,28 @@ inputs:
     description: Optional extra instructions for the review
     required: false
     default: ''
+  approver:
+    description: Submit an approving or requesting-changes PR review based on the model decision
+    required: false
+    default: 'false'
+  strictness:
+    description: Review strictness level; one of lenient, balanced, or strict
+    required: false
+    default: balanced
+  focus:
+    description: JSON array, comma-separated list, or newline list of focus areas to review; defaults to all areas
+    required: false
+    default: ''
   pull-request-number:
     description: PR number (required for workflow_dispatch when not running on a pull_request event)
     required: false
     default: ''
+
+outputs:
+  review:
+    description: Raw markdown review text from the model
+  decision:
+    description: Model decision when approver is true; approve, request_changes, or empty
 
 runs:
   using: node20
