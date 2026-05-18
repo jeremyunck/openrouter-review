@@ -18,6 +18,24 @@ on:
         description: Optional extra review instructions
         required: false
         type: string
+      approver:
+        description: Submit an approve/request-changes PR review
+        required: false
+        default: false
+        type: boolean
+      strictness:
+        description: Review strictness
+        required: false
+        default: balanced
+        type: choice
+        options:
+          - lenient
+          - balanced
+          - strict
+      focus:
+        description: JSON array, comma-separated list, or newline list of focus areas
+        required: false
+        type: string
 
 jobs:
   review:
@@ -33,4 +51,7 @@ jobs:
           open-router-api-key: ${{ secrets.OPEN_ROUTER_API_KEY }}
           model: ${{ github.event_name == 'workflow_dispatch' && inputs.model || vars.OPENROUTER_MODEL || '' }}
           prompt: ${{ github.event_name == 'workflow_dispatch' && inputs.prompt || '' }}
+          approver: ${{ github.event_name == 'workflow_dispatch' && inputs.approver || false }}
+          strictness: ${{ github.event_name == 'workflow_dispatch' && inputs.strictness || 'balanced' }}
+          focus: ${{ github.event_name == 'workflow_dispatch' && inputs.focus || '' }}
           pull-request-number: ${{ github.event_name == 'workflow_dispatch' && inputs.pull_request_number || '' }}

@@ -26,6 +26,24 @@ on:
         description: PR number to review
         required: true
         type: number
+      approver:
+        description: Submit an approve/request-changes PR review
+        required: false
+        default: false
+        type: boolean
+      strictness:
+        description: Review strictness
+        required: false
+        default: balanced
+        type: choice
+        options:
+          - lenient
+          - balanced
+          - strict
+      focus:
+        description: JSON array, comma-separated list, or newline list of focus areas
+        required: false
+        type: string
 
 jobs:
   review:
@@ -39,6 +57,9 @@ jobs:
         with:
           open-router-api-key: ${{ secrets.OPEN_ROUTER_API_KEY }}
           pull-request-number: ${{ github.event_name == 'workflow_dispatch' && inputs.pull_request_number || '' }}
+          approver: ${{ github.event_name == 'workflow_dispatch' && inputs.approver || false }}
+          strictness: ${{ github.event_name == 'workflow_dispatch' && inputs.strictness || 'balanced' }}
+          focus: ${{ github.event_name == 'workflow_dispatch' && inputs.focus || '' }}
 ```
 
 ### Inputs
@@ -49,19 +70,26 @@ jobs:
 | `model` | No | OpenRouter model id (default: `deepseek/deepseek-v4-flash`) |
 | `github-token` | No | Defaults to `github.token` |
 | `prompt` | No | Extra instructions appended to the review request |
+| `approver` | No | When `true`, prompts the model for a decision and submits a PR review with `APPROVE` or `REQUEST_CHANGES` instead of posting the marker comment (default: `false`) |
+| `strictness` | No | Review strictness: `lenient`, `balanced`, or `strict` (default: `balanced`) |
+| `focus` | No | Focus areas as a JSON array, comma-separated list, or newline list. Defaults to all built-in areas. |
 | `pull-request-number` | No* | PR number; required for `workflow_dispatch` when not triggered by `pull_request` |
+
+Built-in focus areas are `security`, `correctness`, `error_handling`, `tests`, `performance`, `readability`, `design`, and `maintainability`.
 
 ### Outputs
 
 | Output | Description |
 | --- | --- |
 | `review` | Raw markdown review text from the model |
+| `decision` | Model decision when `approver` is `true`: `approve`, `request_changes`, or empty |
 
 ## Behavior
 
 - Fetches the full PR diff from the GitHub API.
-- Sends the diff to OpenRouter's chat completions API with a code-review system prompt.
-- Posts (or updates) a single PR comment tagged with `<!-- openrouter-review -->` so reruns on new commits replace the previous review instead of spamming the thread.
+- Sends the diff to OpenRouter's chat completions API with a code-review system prompt that reflects the selected strictness and focus areas.
+- By default, posts (or updates) a single PR comment tagged with `<!-- openrouter-review -->` so reruns on new commits replace the previous review instead of spamming the thread.
+- When `approver` is `true`, asks the model for a structured decision and submits either an approving or requesting-changes PR review with the model review as the body.
 - Truncates very large diffs before sending them to the model.
 
 ## Development
