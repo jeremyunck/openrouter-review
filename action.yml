@@ -12,7 +12,8 @@ inputs:
     required: true
   model:
     description: OpenRouter model id (e.g. deepseek/deepseek-v4-flash, openai/gpt-4o)
-    required: true
+    required: false
+    default: deepseek/deepseek-v4-flash
   github-token:
     description: GitHub token with pull-requests write access
     required: false

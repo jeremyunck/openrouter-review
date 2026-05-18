@@ -31,6 +31,6 @@ jobs:
         uses: ./
         with:
           openrouter-api-key: ${{ secrets.OPEN_ROUTER_API_KEY }}
-          model: ${{ github.event_name == 'workflow_dispatch' && inputs.model || vars.OPENROUTER_MODEL || 'deepseek/deepseek-v4-flash' }}
+          model: ${{ github.event_name == 'workflow_dispatch' && inputs.model || vars.OPENROUTER_MODEL || '' }}
           prompt: ${{ github.event_name == 'workflow_dispatch' && inputs.prompt || '' }}
           pull-request-number: ${{ github.event_name == 'workflow_dispatch' && inputs.pull_request_number || '' }}

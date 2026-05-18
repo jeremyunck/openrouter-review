@@ -31838,6 +31838,7 @@ const core = __nccwpck_require__(7484);
 const github = __nccwpck_require__(3228);
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash';
 const COMMENT_MARKER = '<!-- openrouter-review -->';
 const MAX_DIFF_CHARS = 120_000;
 
@@ -31978,7 +31979,7 @@ async function upsertReviewComment(octokit, owner, repo, issueNumber, body) {
 
 async function run() {
   const apiKey = core.getInput('openrouter-api-key', { required: true });
-  const model = core.getInput('model', { required: true });
+  const model = core.getInput('model') || DEFAULT_MODEL;
   const token = core.getInput('github-token', { required: true });
   const extraPrompt = core.getInput('prompt') || '';
   const inputPullNumber = core.getInput('pull-request-number');
