@@ -4,6 +4,7 @@ const test = require('node:test');
 const {
   DEFAULT_FOCUS_AREAS,
   buildMessages,
+  callOpenRouterWithFallback,
   parseApproverResponse,
   parseFocusAreas,
   parseStrictness,
@@ -52,6 +53,79 @@ test('buildMessages includes selected strictness, focus areas, and approver inst
   assert.match(systemMessage.content, /Security:/);
   assert.doesNotMatch(systemMessage.content, /Performance:/);
   assert.match(systemMessage.content, /"decision" must be either "approve" or "request_changes"/);
+});
+
+function makeFetchStub(responses) {
+  const calls = [];
+  const queue = [...responses];
+  const stub = async (url, init) => {
+    const payload = JSON.parse(init.body);
+    calls.push({ url, model: payload.model });
+    const next = queue.shift();
+    if (!next) {
+      throw new Error('fetch stub called more times than expected');
+    }
+    return {
+      ok: next.status >= 200 && next.status < 300,
+      status: next.status,
+      text: async () => next.body,
+    };
+  };
+  return { stub, calls };
+}
+
+test('callOpenRouterWithFallback returns primary model content on success', async () => {
+  const successBody = JSON.stringify({ choices: [{ message: { content: 'all good' } }] });
+  const { stub, calls } = makeFetchStub([{ status: 200, body: successBody }]);
+  const originalFetch = global.fetch;
+  global.fetch = stub;
+
+  try {
+    const result = await callOpenRouterWithFallback('k', 'primary/model', 'fallback/model', []);
+    assert.deepEqual(result, { content: 'all good', model: 'primary/model' });
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].model, 'primary/model');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('callOpenRouterWithFallback retries with fallback model when primary returns non-success', async () => {
+  const errorBody = JSON.stringify({ error: { message: 'rate limited' } });
+  const successBody = JSON.stringify({ choices: [{ message: { content: 'fallback content' } }] });
+  const { stub, calls } = makeFetchStub([
+    { status: 429, body: errorBody },
+    { status: 200, body: successBody },
+  ]);
+  const originalFetch = global.fetch;
+  global.fetch = stub;
+
+  try {
+    const result = await callOpenRouterWithFallback('k', 'primary/model', 'fallback/model', []);
+    assert.deepEqual(result, { content: 'fallback content', model: 'fallback/model' });
+    assert.deepEqual(
+      calls.map((c) => c.model),
+      ['primary/model', 'fallback/model'],
+    );
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('callOpenRouterWithFallback rethrows when no fallback is configured', async () => {
+  const errorBody = JSON.stringify({ error: { message: 'rate limited' } });
+  const { stub } = makeFetchStub([{ status: 429, body: errorBody }]);
+  const originalFetch = global.fetch;
+  global.fetch = stub;
+
+  try {
+    await assert.rejects(
+      callOpenRouterWithFallback('k', 'primary/model', '', []),
+      /OpenRouter request failed \(429\)/,
+    );
+  } finally {
+    global.fetch = originalFetch;
+  }
 });
 
 test('parseApproverResponse extracts decisions and markdown review text', () => {

@@ -30204,6 +30204,23 @@ async function callOpenRouter(apiKey, model, messages) {
   return content.trim();
 }
 
+async function callOpenRouterWithFallback(apiKey, model, fallbackModel, messages) {
+  try {
+    const content = await callOpenRouter(apiKey, model, messages);
+    return { content, model };
+  } catch (error) {
+    if (!fallbackModel || fallbackModel === model) {
+      throw error;
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    core.warning(`Primary model "${model}" failed: ${message}. Retrying with fallback model "${fallbackModel}".`);
+
+    const content = await callOpenRouter(apiKey, fallbackModel, messages);
+    return { content, model: fallbackModel };
+  }
+}
+
 function parseDecision(input) {
   const decision = normalizeOptionName(input);
 
@@ -30316,6 +30333,7 @@ async function upsertReviewComment(octokit, owner, repo, issueNumber, body) {
 async function run() {
   const apiKey = core.getInput('open-router-api-key', { required: true });
   const model = core.getInput('model') || DEFAULT_MODEL;
+  const fallbackModel = (core.getInput('fallback-model') || '').trim();
   const token = core.getInput('github-token', { required: true });
   const extraPrompt = core.getInput('prompt') || '';
   const inputPullNumber = core.getInput('pull-request-number');
@@ -30328,7 +30346,7 @@ async function run() {
   const { owner, repo } = context.repo;
   const pullNumber = resolvePullNumber(context.eventName, context.payload, inputPullNumber);
 
-  core.info(`Reviewing PR #${pullNumber} in ${owner}/${repo} with model ${model}`);
+  core.info(`Reviewing PR #${pullNumber} in ${owner}/${repo} with model ${model}${fallbackModel ? ` (fallback: ${fallbackModel})` : ''}`);
   core.info(`Review settings: approver=${approver}, strictness=${strictness}, focus=${focusAreas.map(({ name }) => name).join(', ')}`);
 
   let diff = await fetchPullRequestDiff(octokit, owner, repo, pullNumber);
@@ -30344,7 +30362,12 @@ async function run() {
   }
 
   const messages = buildMessages(diff, extraPrompt, { approver, focusAreas, strictness });
-  const response = await callOpenRouter(apiKey, model, messages);
+  const { content: response, model: modelUsed } = await callOpenRouterWithFallback(
+    apiKey,
+    model,
+    fallbackModel,
+    messages,
+  );
   const { decision, review } = approver
     ? parseApproverResponse(response)
     : { decision: '', review: response };
@@ -30352,7 +30375,7 @@ async function run() {
   if (approver) {
     await submitPullRequestReview(octokit, owner, repo, pullNumber, review, decision);
   } else {
-    const commentBody = formatComment(review, model);
+    const commentBody = formatComment(review, modelUsed);
     await upsertReviewComment(octokit, owner, repo, pullNumber, commentBody);
   }
 
@@ -30372,6 +30395,7 @@ module.exports = {
   STRICTNESS_LEVELS,
   buildMessages,
   buildSystemPrompt,
+  callOpenRouterWithFallback,
   parseApproverResponse,
   parseFocusAreas,
   parseStrictness,

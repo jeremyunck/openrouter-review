@@ -14,6 +14,10 @@ inputs:
     description: OpenRouter model id (e.g. deepseek/deepseek-v4-flash, openai/gpt-4o)
     required: false
     default: deepseek/deepseek-v4-flash
+  fallback-model:
+    description: OpenRouter model id to use if the primary model returns a non-success response
+    required: false
+    default: ''
   github-token:
     description: GitHub token with pull-requests write access
     required: false
