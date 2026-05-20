@@ -8,7 +8,7 @@ on:
       model:
         description: OpenRouter model id
         required: false
-        default: deepseek/deepseek-v4-flash
+        default: deepseek/deepseek-v4-flash:free
         type: string
       pull_request_number:
         description: PR number to review
