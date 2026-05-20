@@ -92,6 +92,7 @@ jobs:
 | --- | --- | --- |
 | `open-router-api-key` | Yes | OpenRouter API key |
 | `model` | No | OpenRouter model id (default: `deepseek/deepseek-v4-flash`) |
+| `fallback-model` | No | OpenRouter model id to use if the primary `model` returns a non-success response |
 | `github-token` | No | Defaults to `github.token` |
 | `prompt` | No | Extra instructions appended to the review request |
 | `approver` | No | When `true`, prompts the model for a decision and submits a PR review with `APPROVE` or `REQUEST_CHANGES` instead of posting the marker comment (default: `false`) |
