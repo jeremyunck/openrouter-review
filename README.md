@@ -9,6 +9,30 @@ GitHub Action that sends a pull request diff to [OpenRouter](https://openrouter.
 
 ## Usage
 
+Copy the minimal workflow below into `.github/workflows/openrouter-review.yml` to get started:
+
+```yaml
+name: OpenRouter PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jeremyunck/openrouter-review@v1
+        with:
+          open-router-api-key: ${{ secrets.OPEN_ROUTER_API_KEY }}
+```
+
+For manual triggering and advanced options, use the full workflow below:
+
 ```yaml
 name: OpenRouter PR Review
 
