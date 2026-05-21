@@ -55,6 +55,22 @@ test('buildMessages includes selected strictness, focus areas, and approver inst
   assert.match(systemMessage.content, /"decision" must be either "approve" or "request_changes"/);
 });
 
+test('buildMessages includes structured markdown format for non-approver reviews', () => {
+  const [systemMessage] = buildMessages('diff --git a/file.js b/file.js', '', {
+    approver: false,
+    strictness: 'balanced',
+    focusAreas: parseFocusAreas('security, correctness'),
+  });
+
+  assert.match(systemMessage.content, /## Overview/);
+  assert.match(systemMessage.content, /## Findings/);
+  assert.match(systemMessage.content, /### Critical/);
+  assert.match(systemMessage.content, /### Issues/);
+  assert.match(systemMessage.content, /### Suggestions/);
+  assert.match(systemMessage.content, /## Summary/);
+  assert.doesNotMatch(systemMessage.content, /Return concise, actionable markdown with clear sections/);
+});
+
 function makeFetchStub(responses) {
   const calls = [];
   const queue = [...responses];

@@ -227,7 +227,31 @@ function buildSystemPrompt({ approver, focusAreas, strictness }) {
 - Use "approve" when the PR is acceptable to merge as-is or only has optional suggestions.
 - Use "request_changes" when the selected strictness level and focus areas reveal required fixes.
 - "review" must be concise, actionable markdown with clear sections.`
-    : 'Return concise, actionable markdown with clear sections.';
+    : `Return your review in the following markdown format:
+
+---
+
+## Overview
+
+<Brief summary of the PR and overall impression.>
+
+## Findings
+
+### Critical
+<Blocking issues that must be fixed before merging. Include file paths and line numbers.>
+
+### Issues
+<Non-blocking but significant concerns. Include file paths and line numbers.>
+
+### Suggestions
+<Optional improvements, style nits, or ideas for future work.>
+
+## Summary
+
+<Key takeaways and final recommendation.>
+
+Use bullet points within each section. Include specific file paths and line numbers where relevant.
+If a section has no items, write "None." instead of leaving it blank.`;
 
   return `You are an expert code reviewer. Review the pull request diff below.
 
@@ -423,31 +447,7 @@ async function submitPullRequestReview(octokit, owner, repo, pullNumber, review,
   core.info(`Submitted PR review with decision ${decision}.`);
 }
 
-async function findExistingReviewComment(octokit, owner, repo, issueNumber) {
-  const comments = await octokit.paginate(octokit.rest.issues.listComments, {
-    owner,
-    repo,
-    issue_number: issueNumber,
-    per_page: 100,
-  });
-
-  return comments.find((comment) => comment.body?.includes(COMMENT_MARKER)) ?? null;
-}
-
-async function upsertReviewComment(octokit, owner, repo, issueNumber, body) {
-  const existing = await findExistingReviewComment(octokit, owner, repo, issueNumber);
-
-  if (existing) {
-    await octokit.rest.issues.updateComment({
-      owner,
-      repo,
-      comment_id: existing.id,
-      body,
-    });
-    core.info(`Updated existing review comment (#${existing.id}).`);
-    return;
-  }
-
+async function postReviewComment(octokit, owner, repo, issueNumber, body) {
   await octokit.rest.issues.createComment({
     owner,
     repo,
@@ -505,7 +505,7 @@ const prSummary = await fetchPrSummary(octokit, owner, repo, pullNumber);
     await submitPullRequestReview(octokit, owner, repo, pullNumber, review, decision);
   } else {
     const commentBody = formatComment(review, modelUsed);
-    await upsertReviewComment(octokit, owner, repo, pullNumber, commentBody);
+    await postReviewComment(octokit, owner, repo, pullNumber, commentBody);
   }
 
   core.setOutput('review', review);
