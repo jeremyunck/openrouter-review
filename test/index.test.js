@@ -74,14 +74,14 @@ function makeFetchStub(responses) {
   return { stub, calls };
 }
 
-test('callOpenRouterWithFallback returns primary model content on success', async () => {
+test('callOpenRouterWithFallback returns primary model content on success (0 retries)', async () => {
   const successBody = JSON.stringify({ choices: [{ message: { content: 'all good' } }] });
   const { stub, calls } = makeFetchStub([{ status: 200, body: successBody }]);
   const originalFetch = global.fetch;
   global.fetch = stub;
 
   try {
-    const result = await callOpenRouterWithFallback('k', 'primary/model', 'fallback/model', []);
+    const result = await callOpenRouterWithFallback('k', 'primary/model', 'fallback/model', [], 0);
     assert.deepEqual(result, { content: 'all good', model: 'primary/model' });
     assert.equal(calls.length, 1);
     assert.equal(calls[0].model, 'primary/model');
@@ -90,7 +90,7 @@ test('callOpenRouterWithFallback returns primary model content on success', asyn
   }
 });
 
-test('callOpenRouterWithFallback retries with fallback model when primary returns non-success', async () => {
+test('callOpenRouterWithFallback retries with fallback model when primary fails (0 retries)', async () => {
   const errorBody = JSON.stringify({ error: { message: 'rate limited' } });
   const successBody = JSON.stringify({ choices: [{ message: { content: 'fallback content' } }] });
   const { stub, calls } = makeFetchStub([
@@ -101,7 +101,7 @@ test('callOpenRouterWithFallback retries with fallback model when primary return
   global.fetch = stub;
 
   try {
-    const result = await callOpenRouterWithFallback('k', 'primary/model', 'fallback/model', []);
+    const result = await callOpenRouterWithFallback('k', 'primary/model', 'fallback/model', [], 0);
     assert.deepEqual(result, { content: 'fallback content', model: 'fallback/model' });
     assert.deepEqual(
       calls.map((c) => c.model),
@@ -112,7 +112,7 @@ test('callOpenRouterWithFallback retries with fallback model when primary return
   }
 });
 
-test('callOpenRouterWithFallback rethrows when no fallback is configured', async () => {
+test('callOpenRouterWithFallback rethrows when no fallback is configured (0 retries)', async () => {
   const errorBody = JSON.stringify({ error: { message: 'rate limited' } });
   const { stub } = makeFetchStub([{ status: 429, body: errorBody }]);
   const originalFetch = global.fetch;
@@ -120,12 +120,84 @@ test('callOpenRouterWithFallback rethrows when no fallback is configured', async
 
   try {
     await assert.rejects(
-      callOpenRouterWithFallback('k', 'primary/model', '', []),
+      callOpenRouterWithFallback('k', 'primary/model', '', [], 0),
       /OpenRouter request failed \(429\)/,
     );
   } finally {
     global.fetch = originalFetch;
   }
+});
+
+test('callOpenRouterWithFallback retries primary model multiple times before fallback', async () => {
+  const errorBody = JSON.stringify({ error: { message: 'overloaded' } });
+  const successBody = JSON.stringify({ choices: [{ message: { content: 'ok after retry' } }] });
+  // 2 retries → 3 primary attempts, all fail, then fallback succeeds
+  const { stub, calls } = makeFetchStub([
+    { status: 429, body: errorBody },
+    { status: 429, body: errorBody },
+    { status: 429, body: errorBody },
+    { status: 200, body: successBody },
+  ]);
+  const originalFetch = global.fetch;
+  global.fetch = stub;
+
+  try {
+    const result = await callOpenRouterWithFallback('k', 'primary/model', 'fallback/model', [], 2);
+    assert.deepEqual(result, { content: 'ok after retry', model: 'fallback/model' });
+    assert.deepEqual(
+      calls.map((c) => c.model),
+      ['primary/model', 'primary/model', 'primary/model', 'fallback/model'],
+    );
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('callOpenRouterWithFallback throws after exhausting all primary retries without fallback', async () => {
+  const errorBody = JSON.stringify({ error: { message: 'always fails' } });
+  const { stub } = makeFetchStub([
+    { status: 429, body: errorBody },
+    { status: 429, body: errorBody },
+  ]);
+  const originalFetch = global.fetch;
+  global.fetch = stub;
+
+  try {
+    await assert.rejects(
+      callOpenRouterWithFallback('k', 'primary/model', '', [], 1),
+      /always fails/,
+    );
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('buildMessages includes PR summary in user content before the diff', () => {
+  const [, userMessage] = buildMessages('diff --git a/file.js b/file.js', '', {
+    strictness: 'balanced',
+    focusAreas: parseFocusAreas('security'),
+    prSummary: 'Title: Fix login bug\n\nDescription:\nFixes a null pointer in the auth flow.',
+  });
+
+  assert.ok(userMessage.content.includes('Pull request summary:'));
+  assert.ok(userMessage.content.includes('Title: Fix login bug'));
+  assert.ok(userMessage.content.includes('Fixes a null pointer in the auth flow.'));
+  assert.ok(userMessage.content.includes('Pull request diff:'));
+  assert.ok(userMessage.content.includes('diff --git a/file.js b/file.js'));
+
+  const summaryIdx = userMessage.content.indexOf('Pull request summary:');
+  const diffIdx = userMessage.content.indexOf('Pull request diff:');
+  assert.ok(summaryIdx < diffIdx, 'summary must appear before diff');
+});
+
+test('buildMessages omits summary section when no summary is provided', () => {
+  const [, userMessage] = buildMessages('diff --git a/file.js b/file.js', '', {
+    strictness: 'balanced',
+    focusAreas: parseFocusAreas('security'),
+  });
+
+  assert.doesNotMatch(userMessage.content, /Pull request summary:/);
+  assert.ok(userMessage.content.includes('Pull request diff:'));
 });
 
 test('parseApproverResponse extracts decisions and markdown review text', () => {

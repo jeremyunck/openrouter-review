@@ -5,6 +5,8 @@ const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash';
 const COMMENT_MARKER = '<!-- openrouter-review -->';
 const MAX_DIFF_CHARS = 120_000;
+const MAX_RETRIES = 3;
+const RETRY_BASE_DELAY_MS = 1000;
 
 const STRICTNESS_LEVELS = {
   lenient: {
@@ -196,6 +198,24 @@ async function fetchPullRequestDiff(octokit, owner, repo, pullNumber) {
   return typeof response.data === 'string' ? response.data : String(response.data ?? '');
 }
 
+async function fetchPrSummary(octokit, owner, repo, pullNumber) {
+  const { data } = await octokit.rest.pulls.get({
+    owner,
+    repo,
+    pull_number: pullNumber,
+  });
+
+  const title = data.title || '';
+  const body = data.body || '';
+  let summary = `Title: ${title}`;
+
+  if (body.trim()) {
+    summary += `\n\nDescription:\n${body.trim()}`;
+  }
+
+  return summary;
+}
+
 function buildSystemPrompt({ approver, focusAreas, strictness }) {
   const strictnessConfig = STRICTNESS_LEVELS[strictness];
   const focusList = focusAreas.map((area) => `- ${area.label}: ${area.prompt}`).join('\n');
@@ -226,7 +246,15 @@ function buildMessages(diff, extraPrompt, options = {}) {
   const strictness = options.strictness || DEFAULT_STRICTNESS;
   const focusAreas = options.focusAreas || DEFAULT_FOCUS_AREAS;
   const approver = Boolean(options.approver);
-  let userContent = `Pull request diff:\n\n\`\`\`diff\n${diff}\n\`\`\``;
+  const prSummary = options.prSummary || '';
+
+  let userContent = '';
+
+  if (prSummary.trim()) {
+    userContent += `Pull request summary:\n\n${prSummary.trim()}\n\n`;
+  }
+
+  userContent += `Pull request diff:\n\n\`\`\`diff\n${diff}\n\`\`\``;
 
   if (extraPrompt.trim()) {
     userContent += `\n\nAdditional review instructions:\n${extraPrompt.trim()}`;
@@ -276,9 +304,36 @@ async function callOpenRouter(apiKey, model, messages) {
   return content.trim();
 }
 
-async function callOpenRouterWithFallback(apiKey, model, fallbackModel, messages) {
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function callWithRetry(apiKey, model, messages, retries) {
+  const maxAttempts = retries + 1;
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const content = await callOpenRouter(apiKey, model, messages);
+      return content;
+    } catch (error) {
+      lastError = error;
+      if (attempt < maxAttempts) {
+        const delay = RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+        core.warning(
+          `Attempt ${attempt}/${maxAttempts} for model "${model}" failed: ${error instanceof Error ? error.message : String(error)}. Retrying in ${delay}ms.`,
+        );
+        await sleep(delay);
+      }
+    }
+  }
+
+  throw lastError;
+}
+
+async function callOpenRouterWithFallback(apiKey, model, fallbackModel, messages, maxRetries = MAX_RETRIES) {
   try {
-    const content = await callOpenRouter(apiKey, model, messages);
+    const content = await callWithRetry(apiKey, model, messages, maxRetries);
     return { content, model };
   } catch (error) {
     if (!fallbackModel || fallbackModel === model) {
@@ -286,9 +341,9 @@ async function callOpenRouterWithFallback(apiKey, model, fallbackModel, messages
     }
 
     const message = error instanceof Error ? error.message : String(error);
-    core.warning(`Primary model "${model}" failed: ${message}. Retrying with fallback model "${fallbackModel}".`);
+    core.warning(`Primary model "${model}" exhausted all retries: ${message}. Retrying with fallback model "${fallbackModel}".`);
 
-    const content = await callOpenRouter(apiKey, fallbackModel, messages);
+    const content = await callWithRetry(apiKey, fallbackModel, messages, maxRetries);
     return { content, model: fallbackModel };
   }
 }
@@ -433,7 +488,9 @@ async function run() {
     diff = `${diff.slice(0, MAX_DIFF_CHARS)}\n\n... [diff truncated due to size]`;
   }
 
-  const messages = buildMessages(diff, extraPrompt, { approver, focusAreas, strictness });
+const prSummary = await fetchPrSummary(octokit, owner, repo, pullNumber);
+
+  const messages = buildMessages(diff, extraPrompt, { approver, focusAreas, prSummary, strictness });
   const { content: response, model: modelUsed } = await callOpenRouterWithFallback(
     apiKey,
     model,
@@ -468,6 +525,7 @@ module.exports = {
   buildMessages,
   buildSystemPrompt,
   callOpenRouterWithFallback,
+  fetchPrSummary,
   parseApproverResponse,
   parseFocusAreas,
   parseStrictness,
