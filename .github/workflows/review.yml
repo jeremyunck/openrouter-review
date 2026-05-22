@@ -55,3 +55,7 @@ jobs:
           strictness: ${{ github.event_name == 'workflow_dispatch' && inputs.strictness || 'balanced' }}
           focus: ${{ github.event_name == 'workflow_dispatch' && inputs.focus || '' }}
           pull-request-number: ${{ github.event_name == 'workflow_dispatch' && inputs.pull_request_number || '' }}
+      - name: Clean up runner workspace
+        if: always()
+        shell: bash
+        run: rm -rf "${{ github.workspace }}"
