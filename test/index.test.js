@@ -42,7 +42,7 @@ test('parseFocusAreas rejects unknown focus areas', () => {
   assert.throws(() => parseFocusAreas('security, vibes'), /Invalid focus area/);
 });
 
-test('buildMessages includes selected strictness, focus areas, and approver instructions', () => {
+test('buildMessages includes selected strictness, focus areas, severity definitions, and process instructions', () => {
   const [systemMessage] = buildMessages('diff --git a/file.js b/file.js', '', {
     approver: true,
     strictness: 'strict',
@@ -52,7 +52,10 @@ test('buildMessages includes selected strictness, focus areas, and approver inst
   assert.match(systemMessage.content, /Strictness: Strict/);
   assert.match(systemMessage.content, /Security:/);
   assert.doesNotMatch(systemMessage.content, /Performance:/);
-  assert.match(systemMessage.content, /"decision" must be either "approve" or "request_changes"/);
+  assert.ok(systemMessage.content.includes('"decision": either "approve" or "request_changes"'));
+  assert.match(systemMessage.content, /🔴 CRITICAL/);
+  assert.match(systemMessage.content, /Understand the change/);
+  assert.match(systemMessage.content, /Analyze file by file/);
 });
 
 test('buildMessages includes structured markdown format for non-approver reviews', () => {
@@ -63,12 +66,15 @@ test('buildMessages includes structured markdown format for non-approver reviews
   });
 
   assert.match(systemMessage.content, /## Overview/);
-  assert.match(systemMessage.content, /## Findings/);
-  assert.match(systemMessage.content, /### Critical/);
-  assert.match(systemMessage.content, /### Issues/);
-  assert.match(systemMessage.content, /### Suggestions/);
-  assert.match(systemMessage.content, /## Summary/);
-  assert.doesNotMatch(systemMessage.content, /Return concise, actionable markdown with clear sections/);
+  assert.match(systemMessage.content, /## File-by-File Feedback/);
+  assert.match(systemMessage.content, /## Overall Assessment/);
+  assert.match(systemMessage.content, /🔴 CRITICAL/);
+  assert.match(systemMessage.content, /🟡 MAJOR/);
+  assert.match(systemMessage.content, /🟢 MINOR/);
+  assert.match(systemMessage.content, /⚪ NITPICK/);
+  assert.match(systemMessage.content, /Understand the change/);
+  assert.match(systemMessage.content, /Analyze file by file/);
+  assert.doesNotMatch(systemMessage.content, /(Critical|Issues|Suggestions|Summary)\]/);
 });
 
 function makeFetchStub(responses) {

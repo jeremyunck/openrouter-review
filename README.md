@@ -117,6 +117,25 @@ Built-in focus areas are `security`, `correctness`, `error_handling`, `tests`, `
 - When `approver` is `true`, asks the model for a structured decision and submits either an approving or requesting-changes PR review with the model review as the body.
 - Truncates very large diffs before sending them to the model.
 
+## Review Template
+
+Reviews use a structured, severity-classified format:
+
+- **🔴 CRITICAL** — Bugs, vulnerabilities, or correctness errors that must be fixed before merging.
+- **🟡 MAJOR** — Significant design, performance, error handling, or test coverage concerns.
+- **🟢 MINOR** — Readability, naming, or small style issues.
+- **⚪ NITPICK** — Personal preference or ideas for future improvement.
+
+The model is prompted to:
+1. Understand the PR first by reading the title, description, and diff.
+2. Analyze each changed file individually.
+3. Assign exactly one severity level per finding.
+4. Include exact file paths and line numbers.
+5. Provide concrete before/after code suggestions (`diff` blocks) for 🔴 and 🟡 findings.
+6. Only flag what it is confident about.
+
+The review ends with an overall quality rating (⭐ out of 5), strengths, key concerns, and a final verdict.
+
 ## Development
 
 ```bash
