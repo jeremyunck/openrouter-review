@@ -58,6 +58,35 @@ test('buildMessages includes selected strictness, focus areas, severity definiti
   assert.match(systemMessage.content, /Analyze file by file/);
 });
 
+test('buildMessages includes anti-hallucination guardrails in both modes', () => {
+  for (const approver of [true, false]) {
+    const [systemMessage] = buildMessages('diff --git a/file.js b/file.js', '', {
+      approver,
+      strictness: 'balanced',
+      focusAreas: parseFocusAreas('security'),
+    });
+
+    // Grounding: only flag evidence visible in the diff.
+    assert.match(systemMessage.content, /grounded in evidence/i);
+    // Do not speculate about code outside the diff.
+    assert.match(systemMessage.content, /you cannot see/i);
+    // False positives are worse than silence.
+    assert.match(systemMessage.content, /false positive/i);
+    // It is acceptable to find nothing / approve a clean PR.
+    assert.match(systemMessage.content, /no issues/i);
+  }
+});
+
+test('buildMessages tells the approver it may approve a clean PR with no findings', () => {
+  const [systemMessage] = buildMessages('diff --git a/file.js b/file.js', '', {
+    approver: true,
+    strictness: 'balanced',
+    focusAreas: parseFocusAreas('security'),
+  });
+
+  assert.match(systemMessage.content, /no issues at all/i);
+});
+
 test('buildMessages includes structured markdown format for non-approver reviews', () => {
   const [systemMessage] = buildMessages('diff --git a/file.js b/file.js', '', {
     approver: false,

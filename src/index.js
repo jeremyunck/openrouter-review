@@ -207,18 +207,52 @@ async function fetchPrSummary(octokit, owner, repo, pullNumber) {
 
   const title = data.title || '';
   const body = data.body || '';
-  let summary = `Title: ${title}`;
+  const parts = [`Title: ${title}`];
 
-  if (body.trim()) {
-    summary += `\n\nDescription:\n${body.trim()}`;
+  if (data.draft) {
+    parts.push('Status: Draft (work in progress)');
   }
 
-  return summary;
+  const baseRef = data.base?.ref;
+  const headRef = data.head?.ref;
+  if (baseRef && headRef) {
+    parts.push(`Branch: ${headRef} → ${baseRef}`);
+  }
+
+  const statBits = [];
+  if (Number.isFinite(data.changed_files)) {
+    statBits.push(`${data.changed_files} file(s) changed`);
+  }
+  if (Number.isFinite(data.additions) || Number.isFinite(data.deletions)) {
+    statBits.push(`+${data.additions ?? 0} / -${data.deletions ?? 0} lines`);
+  }
+  if (Number.isFinite(data.commits)) {
+    statBits.push(`${data.commits} commit(s)`);
+  }
+  if (statBits.length) {
+    parts.push(`Change size: ${statBits.join(', ')}`);
+  }
+
+  if (body.trim()) {
+    parts.push(`Description (author's stated intent):\n${body.trim()}`);
+  } else {
+    parts.push('Description: (none provided by the author)');
+  }
+
+  return parts.join('\n\n');
 }
 
 function buildSystemPrompt({ approver, focusAreas, strictness }) {
   const strictnessConfig = STRICTNESS_LEVELS[strictness];
   const focusList = focusAreas.map((area) => `- ${area.label}: ${area.prompt}`).join('\n');
+
+  const reviewPrinciples = `Core principles (read these first — they override the urge to find something):
+- Your goal is to catch real problems the author may have missed, not to produce a long list. A correct, well-written PR is a success. If the change is sound, say so plainly and approve it. Do not invent, inflate, or pad findings to look thorough — that actively harms the author by wasting their time and eroding trust in this review.
+- A false positive is worse than a missed nitpick. When you are not confident a problem is real, do not report it. It is always acceptable to conclude that there are no issues.
+- Every finding must be grounded in evidence that is actually visible in the diff. Point to the specific changed line(s) that are wrong. If you cannot identify the exact line and explain concretely why it is a problem, do not raise it.
+- Never speculate about code you cannot see. You are reviewing a unified diff, not the whole repository. Function definitions, imports, type declarations, call sites, configuration, and tests outside the diff are invisible to you. Do NOT flag something as missing, undefined, unused, broken, or unhandled merely because its definition or usage is not shown — assume code outside the diff exists and works unless the diff itself proves otherwise.
+- Review only what the PR changes. In the diff, lines beginning with \`+\` are added and lines beginning with \`-\` are removed; lines with no prefix are unchanged context shown for orientation. Raise issues about added/changed code (and removals that break something), not about unchanged context lines.
+- Do not flag pre-existing issues, style preferences already consistent with the surrounding code, or hypothetical problems that depend on inputs the change does not actually introduce.`;
 
   const severityDefinitions = `Severity levels (use these consistently):
 - 🔴 CRITICAL: A bug, vulnerability, or correctness error that will cause incorrect behavior, data loss, or production incidents. Requires a fix before merging.
@@ -227,18 +261,21 @@ function buildSystemPrompt({ approver, focusAreas, strictness }) {
 - ⚪ NITPICK: Personal preference, very minor suggestion, or idea for future improvement. Entirely optional.`;
 
   const processInstructions = `Follow this review process before writing your output:
-1. **Understand the change** — Read the PR title, description, and diff to grasp what the PR does and why.
-2. **Analyze file by file** — Evaluate each changed file against the focus areas below. Be thorough but practical.
-3. **Assign severity** — For each finding, choose exactly one severity level from the definitions above.
-4. **Be specific** — Include the exact file path and line numbers for every finding. For 🔴 CRITICAL and 🟡 MAJOR findings, provide a concrete fix suggestion with before/after code.
-5. **Be honest about confidence** — Only flag what you are confident about. If uncertain, mention it and assign a lower severity.
-6. **If the diff is truncated**, note that your review may be incomplete.`;
+1. **Understand the change** — Read the PR title, description, change size, and diff to grasp what the PR does and why. Reviewing against the author's stated intent helps you tell deliberate decisions apart from mistakes.
+2. **Analyze file by file** — Evaluate each changed file against the focus areas below. Use the diff's hunk headers (\`@@ -old +new @@\`) to locate added lines in the new file; cite new-file line numbers.
+3. **Verify before flagging** — For each potential finding, re-read the relevant diff lines and confirm the problem is real and visible there. Discard anything that relies on assumptions about unseen code or that you are not confident about.
+4. **Assign severity** — For each surviving finding, choose exactly one severity level from the definitions above. Calibrate honestly: do not promote a minor concern to CRITICAL.
+5. **Be specific** — Include the exact file path and line numbers for every finding. For 🔴 CRITICAL and 🟡 MAJOR findings, provide a concrete fix suggestion with before/after code.
+6. **If you find nothing wrong, say so** — Do not manufacture issues to fill the template. Reporting "No issues found" on a clean PR is the correct, expected outcome.
+7. **If the diff is truncated**, note that your review may be incomplete rather than guessing about the omitted portions.`;
 
-  const commonFormat = `${severityDefinitions}
+  const commonFormat = `${reviewPrinciples}
+
+${severityDefinitions}
 
 ${processInstructions}
 
-Focus on these areas:
+Focus on these areas (these are lenses to look through, not a checklist you must produce a finding for — only report a focus area when there is a genuine, evidence-backed problem):
 ${focusList}
 
 Strictness: ${strictnessConfig.label}
@@ -252,8 +289,8 @@ ${commonFormat}
 Return valid JSON only. Do not wrap it in markdown fences or add any text outside the JSON.
 The JSON object must have exactly these two keys:
 - "decision": either "approve" or "request_changes"
-  - Use "approve" when all findings from your review are 🟢 MINOR or ⚪ NITPICK (per the strictness level above, none are required fixes).
-  - Use "request_changes" when the strictness level above identifies any required fix (🔴 CRITICAL or higher-severity findings based on the strictness threshold).
+  - Use "approve" when there are no required fixes — including when you found no issues at all, or when every finding is below the strictness threshold (e.g. all 🟢 MINOR or ⚪ NITPICK under the balanced level). Approving a clean PR with no manufactured concerns is the correct outcome.
+  - Use "request_changes" only when the strictness level above identifies a genuine, evidence-backed required fix. Do not request changes over speculative or padded findings.
 - "review": your full review in the format below (as a single string with \\n newlines)
 
 Review format for the "review" field:

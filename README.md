@@ -111,8 +111,9 @@ Built-in focus areas are `security`, `correctness`, `error_handling`, `tests`, `
 
 ## Behavior
 
-- Fetches the full PR diff from the GitHub API.
-- Sends the diff to OpenRouter's chat completions API with a code-review system prompt that reflects the selected strictness and focus areas.
+- Fetches the full PR diff from the GitHub API, plus context about the change (title, description, draft status, source/target branch, and change size).
+- Sends the diff and context to OpenRouter's chat completions API with a code-review system prompt that reflects the selected strictness and focus areas.
+- The prompt is tuned to minimize hallucinated findings: the model is instructed to ground every finding in evidence visible in the diff, never speculate about code it cannot see (definitions, imports, call sites, and tests outside the diff), and treat false positives as worse than silence. Reporting that a clean PR has no issues — and approving it — is an expected, correct outcome.
 - By default, posts (or updates) a single PR comment tagged with `<!-- openrouter-review -->` so reruns on new commits replace the previous review instead of spamming the thread.
 - When `approver` is `true`, asks the model for a structured decision and submits either an approving or requesting-changes PR review with the model review as the body.
 - Truncates very large diffs before sending them to the model.
@@ -132,7 +133,7 @@ The model is prompted to:
 3. Assign exactly one severity level per finding.
 4. Include exact file paths and line numbers.
 5. Provide concrete before/after code suggestions (`diff` blocks) for 🔴 and 🟡 findings.
-6. Only flag what it is confident about.
+6. Only flag genuine, evidence-backed problems it is confident about — and to say so plainly when the PR is clean, rather than inventing issues to fill the template.
 
 The review ends with an overall quality rating (⭐ out of 5), strengths, key concerns, and a final verdict.
 
