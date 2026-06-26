@@ -137,6 +137,42 @@ The model is prompted to:
 
 The review ends with an overall quality rating (⭐ out of 5), strengths, key concerns, and a final verdict.
 
+## Documentation Updater
+
+A companion workflow, [`.github/workflows/docs-update.yml`](.github/workflows/docs-update.yml), keeps your docs in sync with the code. After a pull request is **merged**, it sends the PR diff plus the current contents of the configured documentation files to OpenRouter, asks for updated versions of those files, and opens a follow-up pull request with the proposed changes for you to review.
+
+It runs the standalone Node script [`src/docs-update.js`](src/docs-update.js) (no build step required) and reuses the same model + fallback + retry behavior as the review action.
+
+### Setup
+
+1. Add an [OpenRouter API key](https://openrouter.ai/keys) as a repository secret named `OPEN_ROUTER_API_KEY` (same secret the review action uses).
+2. Configure which documentation files to update on merge via a repository variable named `OPENROUTER_DOC_FILES` (a JSON array, comma-separated, or newline list of paths), for example `README.md, docs/usage.md`. Optionally set `OPENROUTER_MODEL`, `OPENROUTER_FALLBACK_MODEL`, and `OPENROUTER_DOCS_PROMPT` variables.
+3. Under **Settings → Actions → General**, enable **Allow GitHub Actions to create and approve pull requests** so the workflow can open the docs PR.
+
+The workflow can also be run manually via **workflow_dispatch**, where you supply the documentation files, model, prompt customizations, and merged PR number as inputs.
+
+### Inputs
+
+When triggered manually (`workflow_dispatch`), the workflow accepts:
+
+| Input | Required | Description |
+| --- | --- | --- |
+| `doc_files` | Yes | Documentation files to update (JSON array, comma-separated, or newline list). On merge, this comes from the `OPENROUTER_DOC_FILES` repository variable. |
+| `model` | No | OpenRouter model id (default: `deepseek/deepseek-v4-flash`) |
+| `fallback_model` | No | OpenRouter model id to use if the primary model fails |
+| `prompt` | No | Extra documentation instructions / prompt customizations |
+| `pull_request_number` | Yes | Merged PR number whose diff drives the documentation update |
+
+The OpenRouter API key is read from the `OPEN_ROUTER_API_KEY` secret rather than a plaintext input.
+
+### Behavior
+
+- Fetches the merged PR diff and a short summary (title, branch, change size, description) for context.
+- For each documentation file, sends the diff and the file's current contents to OpenRouter with a technical-writer system prompt, then writes back the model's updated version. Files that the change doesn't affect are returned unchanged and left alone.
+- Grounds edits in evidence visible in the diff and makes the smallest set of changes needed for accuracy, preserving the document's existing structure and tone.
+- Truncates very large diffs and documentation files before sending them to the model.
+- Opens a single pull request (branch `docs/openrouter-update-pr-<number>`) with all updated files; it does nothing if no documentation needed changes.
+
 ## Development
 
 ```bash
@@ -144,5 +180,11 @@ npm install
 npm run build
 ```
 
-Commit `dist/index.js` after changing `src/index.js`.
+Commit `dist/index.js` after changing `src/index.js`. The documentation updater in `src/docs-update.js` runs directly with Node and is not bundled, so it needs no rebuild.
+
+Run the test suite with:
+
+```bash
+npm test
+```
 
